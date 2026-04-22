@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>成語賽馬遊戲</title>
+  
+  <!-- 載入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 載入 React 核心庫 -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- 載入 Babel 以便在瀏覽器中編譯 JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- 自訂的動畫 CSS -->
+  <style>
+    @keyframes gallop {
+      0%, 100% { transform: scaleX(-1) translateY(0) rotate(0deg); }
+      25% { transform: scaleX(-1) translateY(-6px) rotate(8deg); }
+      50% { transform: scaleX(-1) translateY(0) rotate(0deg); }
+      75% { transform: scaleX(-1) translateY(3px) rotate(-4deg); }
+    }
+    .anim-gallop { animation: gallop 0.4s infinite; }
+    .anim-gallop-fast { animation: gallop 0.3s infinite; }
+    .anim-gallop-slow { animation: gallop 0.5s infinite; }
+    .facing-right { transform: scaleX(-1); }
+  </style>
+</head>
+<body>
+  <!-- React 應用的掛載點 -->
+  <div id="root"></div>
+
+  <!-- React 遊戲主程式 -->
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    // 成語題庫：包含字義解析與情境應用
+    const QUESTION_BANK = [
+      { q: "「破釜沉舟」的意思是？", options: ["下定決心，不顧一切幹到底", "打破鍋子，沉掉小船", "形容水性很好，不怕沉船", "做事猶豫不決，不敢前進"], answer: "下定決心，不顧一切幹到底" },
+      { q: "「守株待兔」比喻什麼？", options: ["妄想不勞而獲", "保護自然生態", "形容耐心極佳", "善於設陷阱捕獵"], answer: "妄想不勞而獲" },
+      { q: "情境：小明做事總是多此一舉，反而把事情搞砸。適合用哪個成語形容？", options: ["畫蛇添足", "錦上添花", "亡羊補牢", "弄巧成拙"], answer: "畫蛇添足" },
+      { q: "「杯弓蛇影」用來形容什麼樣的心理狀態？", options: ["疑神疑鬼，妄自驚慌", "形容酒量很好", "反應敏捷，眼明手快", "喜歡幻想，不切實際"], answer: "疑神疑鬼，妄自驚慌" },
+      { q: "「盲人摸象」比喻什麼樣的錯誤認知？", options: ["以偏概全，不能了解真相", "缺乏視力，生活不便", "做事憑直覺，不靠邏輯", "眾人合作才能完成大事"], answer: "以偏概全，不能了解真相" },
+      { q: "情境：他仗著總經理是他舅舅，在公司裡作威作福。適合用哪個成語形容？", options: ["狐假虎威", "仗勢欺人", "為虎作倀", "狗仗人勢"], answer: "狐假虎威" },
+      { q: "「塞翁失馬」的下一句通常接什麼，用來比喻禍福時常互轉？", options: ["焉知非福", "後果堪虞", "馬到成功", "失之交臂"], answer: "焉知非福" },
+      { q: "「揠苗助長」告訴我們什麼道理？", options: ["做事不能違背事物發展的客觀規律", "要多幫助別人成長", "農業技術需要創新", "速度越快越容易成功"], answer: "做事不能違背事物發展的客觀規律" },
+      { q: "情境：雖然這次考試沒考好，但只要找出錯誤並改進，下次一定能進步，這就叫做？", options: ["亡羊補牢", "未雨綢繆", "防微杜漸", "亡命之徒"], answer: "亡羊補牢" },
+      { q: "「指鹿為馬」比喻什麼行為？", options: ["顛倒是非，公然作假", "動物分類錯誤", "眼光獨到，見解不凡", "形容魔術手法高明"], answer: "顛倒是非，公然作假" },
+      { q: "「朝三暮四」原意是比喻什麼？", options: ["用詐術欺騙人", "早晚作息不正常", "每天換不同的工作", "時間過得很快"], answer: "用詐術欺騙人" },
+      { q: "情境：大家都在熱烈討論，只有他一句話都不說。適合用哪個成語形容？", options: ["噤若寒蟬", "侃侃而談", "口若懸河", "喋喋不休"], answer: "噤若寒蟬" },
+      { q: "「刻舟求劍」諷刺什麼樣的人？", options: ["拘泥固執，不知變通", "做事非常精確", "喜歡雕刻藝術", "劍法高超的人"], answer: "拘泥固執，不知變通" },
+      { q: "「望梅止渴」比喻什麼？", options: ["用空想來安慰自己", "形容天氣非常炎熱", "喜歡吃酸的食物", "形容果園豐收"], answer: "用空想來安慰自己" },
+      { q: "情境：他遇到困難不但不退縮，反而更加勇敢地面對。適合用哪個成語形容？", options: ["迎難而上", "退避三舍", "知難而退", "畏首畏尾"], answer: "迎難而上" },
+      { q: "「草木皆兵」形容什麼樣的狀態？", options: ["極度驚恐，疑神疑鬼", "軍隊陣容龐大", "隱蔽性很好", "熱愛大自然"], answer: "極度驚恐，疑神疑鬼" },
+      { q: "「班門弄斧」比喻什麼？", options: ["在行家面前賣弄本事，不自量力", "木工技術高超", "喜歡使用斧頭", "勇敢挑戰權威"], answer: "在行家面前賣弄本事，不自量力" },
+      { q: "情境：他雖然家境貧寒，卻能刻苦讀書，終於考上理想大學。適合用哪個成語？", options: ["鑿壁偷光", "遊手好閒", "坐享其成", "得過且過"], answer: "鑿壁偷光" },
+      { q: "「黔驢技窮」比喻什麼？", options: ["本領已經用完，再也無計可施", "驢子生病了", "表演非常精彩", "形容動物很稀有"], answer: "本領已經用完，再也無計可施" },
+      { q: "「濫竽充數」比喻什麼行為？", options: ["沒有真才實學的人混在行家中充數", "樂器演奏非常整齊", "喜歡吹奏樂器", "數量非常多"], answer: "沒有真才實學的人混在行家中充數" },
+      { q: "「井底之蛙」比喻什麼樣的人？", options: ["見識淺薄的人", "住在井裡的人", "喜歡游泳的人", "聲音很大的人"], answer: "見識淺薄的人" },
+      { q: "情境：兩個人互相推卸責任，誰也不肯承認錯誤。適合用哪個成語形容？", options: ["互相推諉", "同舟共濟", "齊心協力", "和衷共濟"], answer: "互相推諉" },
+      { q: "「對牛彈琴」比喻什麼？", options: ["對不懂道理的人講道理", "音樂造詣很高", "喜歡對動物表演", "形容琴聲優美"], answer: "對不懂道理的人講道理" },
+      { q: "「自相矛盾」比喻什麼？", options: ["言語或行為前後不一致", "武器非常鋒利", "喜歡跟別人吵架", "防禦力很強"], answer: "言語或行為前後不一致" },
+      { q: "情境：這件事情非常緊急，一刻也不能耽誤。適合用哪個成語形容？", options: ["刻不容緩", "慢條斯理", "從容不迫", "不慌不忙"], answer: "刻不容緩" },
+      { q: "「掩耳盜鈴」比喻什麼？", options: ["自欺欺人", "聽力不好", "喜歡收集鈴鐺", "動作非常敏捷"], answer: "自欺欺人" },
+      { q: "「南轅北轍」比喻什麼？", options: ["行動和目的正好相反", "方向感很好", "喜歡到處旅行", "車子跑得很快"], answer: "行動和目的正好相反" },
+      { q: "情境：他為了達到目的，使用各種卑鄙的手段。適合用哪個成語形容？", options: ["不擇手段", "光明正大", "堂堂正正", "行俠仗義"], answer: "不擇手段" },
+      { q: "「鷸蚌相爭」的下一句通常接什麼，比喻兩敗俱傷，讓第三者佔了便宜？", options: ["漁翁得利", "兩敗俱傷", "不歡而散", "握手言和"], answer: "漁翁得利" },
+      { q: "「釜底抽薪」比喻什麼？", options: ["從根本上解決問題", "煮飯忘記加水", "偷偷把東西拿走", "形容天氣很冷"], answer: "從根本上解決問題" }
+    ];
+
+    // 隨機打亂陣列函數
+    const shuffleArray = (array) => {
+      const shuffled = [...array];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    };
+
+    function App() {
+      const [gameState, setGameState] = useState('start'); // start, playing, end
+      const [questions, setQuestions] = useState([]);
+      const [currentQIndex, setCurrentQIndex] = useState(0);
+      const [timeLeft, setTimeLeft] = useState(15);
+      const [score, setScore] = useState(0);
+      const [totalAnswered, setTotalAnswered] = useState(0);
+      
+      // 馬匹位置 (0 - 100%)
+      const [playerPos, setPlayerPos] = useState(0);
+      const [bot1Pos, setBot1Pos] = useState(0);
+      const [bot2Pos, setBot2Pos] = useState(0);
+      
+      const [winner, setWinner] = useState(null);
+      const [feedback, setFeedback] = useState(null); // 'correct', 'wrong', 'timeout'
+
+      // 加入背景音樂與背景圖片設定
+      const audioRef = useRef(null);
+      const bgStyle = {
+        backgroundImage: "url('backgroung.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed'
+      };
+
+      // 初始化遊戲
+      const startGame = () => {
+        const shuffledQuestions = shuffleArray(QUESTION_BANK).map(q => ({
+          ...q,
+          options: shuffleArray(q.options)
+        }));
+        setQuestions(shuffledQuestions);
+        setCurrentQIndex(0);
+        setScore(0);
+        setTotalAnswered(0);
+        setPlayerPos(0);
+        setBot1Pos(0);
+        setBot2Pos(0);
+        setTimeLeft(15);
+        setWinner(null);
+        setFeedback(null);
+        setGameState('playing');
+        
+        // 播放背景音樂
+        if (audioRef.current) {
+          audioRef.current.volume = 0.5; // 音量設定 50% 避免蓋過遊戲體驗
+          audioRef.current.play().catch(e => console.log("音樂播放失敗，可能需要使用者互動:", e));
+        }
+      };
+
+      // 結束遊戲
+      const endGame = useCallback((winnerName) => {
+        setWinner(winnerName);
+        setGameState('end');
+      }, []);
+
+      // 檢查勝利條件
+      useEffect(() => {
+        if (gameState !== 'playing') return;
+        
+        const finishLine = 92;
+        if (playerPos >= finishLine) endGame('玩家');
+        else if (bot1Pos >= finishLine) endGame('電腦 1號');
+        else if (bot2Pos >= finishLine) endGame('電腦 2號');
+      }, [playerPos, bot1Pos, bot2Pos, gameState, endGame]);
+
+      // 計時器與電腦馬匹移動邏輯
+      useEffect(() => {
+        if (gameState !== 'playing') return;
+
+        const timer = setInterval(() => {
+          if (!feedback) {
+            setTimeLeft((prev) => prev - 1);
+          }
+
+          setBot1Pos((prev) => Math.min(prev + (Math.random() * 1.5 + 0.8), 100));
+          setBot2Pos((prev) => Math.min(prev + (Math.random() * 1.8 + 0.6), 100));
+        }, 1000);
+
+        return () => clearInterval(timer);
+      }, [gameState, feedback]);
+
+      // 處理超時
+      useEffect(() => {
+        if (timeLeft <= 0 && gameState === 'playing' && !feedback) {
+          handleAnswer(null, true);
+        }
+      }, [timeLeft, gameState, feedback]);
+
+      // 處理答題
+      const handleAnswer = (selectedOption, isTimeout = false) => {
+        if (feedback) return; 
+
+        const currentQuestion = questions[currentQIndex];
+        let isCorrect = false;
+
+        if (!isTimeout) {
+          isCorrect = selectedOption === currentQuestion.answer;
+          if (isCorrect) {
+            setScore(s => s + 1);
+            setPlayerPos(p => Math.min(p + 12, 100));
+            setFeedback('correct');
+          } else {
+            setFeedback('wrong');
+          }
+        } else {
+          setFeedback('timeout');
+        }
+
+        setTotalAnswered(t => t + 1);
+
+        setTimeout(() => {
+          setFeedback(null);
+          setTimeLeft(15);
+          
+          if (currentQIndex + 1 < questions.length) {
+            setCurrentQIndex(currentQIndex + 1);
+          } else {
+            const shuffledQuestions = shuffleArray(QUESTION_BANK).map(q => ({
+              ...q,
+              options: shuffleArray(q.options)
+            }));
+            setQuestions(shuffledQuestions);
+            setCurrentQIndex(0);
+          }
+        }, 1500);
+      };
+
+      // 畫面渲染: 開始畫面
+      if (gameState === 'start') {
+        return (
+          <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans text-stone-800 relative" style={bgStyle}>
+            {/* 背景圖片半透明遮罩，讓文字更好閱讀 */}
+            <div className="absolute inset-0 bg-white/40 backdrop-blur-sm z-0"></div>
+            
+            {/* 背景音樂元素 (隱藏) */}
+            <audio ref={audioRef} src="music.mp3" loop preload="auto"></audio>
+
+            <div className="max-w-md w-full bg-white/95 rounded-2xl shadow-xl p-8 text-center border-4 border-amber-600 relative z-10">
+              <h1 className="text-4xl font-black text-amber-700 mb-6 drop-shadow-sm">🏆 成語賽馬大賽 🏆</h1>
+              <p className="text-lg mb-6 text-stone-600 leading-relaxed">
+                歡迎來到成語知識賽馬場！<br/>
+                電腦將詢問成語故事與情境解析，你有 <b>15秒</b> 可以作答。<br/>
+                答對一題，你的馬匹就會加速前進！<br/>
+                趕緊擊敗另外兩匹電腦馬，搶先抵達終點吧！
+              </p>
+              <button 
+                onClick={startGame}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 px-6 rounded-xl text-xl transition-transform transform hover:scale-105 shadow-lg active:scale-95"
+              >
+                🏁 開始比賽
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // 畫面渲染: 結束畫面
+      if (gameState === 'end') {
+        const isPlayerWin = winner === '玩家';
+        return (
+          <div className="min-h-screen flex flex-col items-center justify-center p-4 font-sans text-stone-800 relative" style={bgStyle}>
+            {/* 背景圖片半透明遮罩 */}
+            <div className="absolute inset-0 bg-white/40 backdrop-blur-sm z-0"></div>
+            
+            {/* 背景音樂元素 */}
+            <audio ref={audioRef} src="music.mp3" loop></audio>
+
+            <div className="max-w-md w-full bg-white/95 rounded-2xl shadow-xl p-8 text-center border-4 border-amber-600 relative z-10 overflow-hidden">
+              {isPlayerWin && <div className="absolute top-0 left-0 w-full h-full bg-yellow-200 opacity-20 pointer-events-none animate-pulse"></div>}
+              
+              <h1 className="text-4xl font-black mb-4">
+                {isPlayerWin ? '🎉 恭喜獲勝！ 🎉' : '😥 比賽結束 😥'}
+              </h1>
+              <h2 className="text-2xl font-bold text-amber-700 mb-6">
+                冠軍是：{winner}
+              </h2>
+              
+              <div className="bg-stone-100 rounded-lg p-4 mb-8 text-left space-y-2 border border-stone-200">
+                <h3 className="text-lg font-bold text-stone-700 border-b pb-2 mb-2">📊 賽後數據統計</h3>
+                <p className="text-lg">✅ 答對題數：<span className="font-bold text-green-600">{score}</span> 題</p>
+                <p className="text-lg">📝 總作答數：<span className="font-bold">{totalAnswered}</span> 題</p>
+                <p className="text-lg">🎯 正確率：<span className="font-bold text-blue-600">
+                  {totalAnswered > 0 ? Math.round((score / totalAnswered) * 100) : 0}%
+                </span></p>
+              </div>
+
+              <button 
+                onClick={startGame}
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-4 px-6 rounded-xl text-xl transition-transform transform hover:scale-105 shadow-lg active:scale-95"
+              >
+                🔄 再跑一局
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // 畫面渲染: 遊戲進行中
+      const currentQ = questions[currentQIndex];
+
+      return (
+        <div className="min-h-screen flex flex-col items-center p-2 sm:p-6 font-sans select-none relative" style={bgStyle}>
+          {/* 遊戲中背景加深，凸顯賽道與題目 */}
+          <div className="absolute inset-0 bg-black/60 z-0"></div>
+          
+          {/* 背景音樂元素 */}
+          <audio ref={audioRef} src="music.mp3" loop></audio>
+
+          {/* 標題與狀態列 */}
+          <div className="w-full max-w-4xl flex justify-between items-center text-white mb-4 px-4 relative z-10">
+            <h2 className="text-2xl font-bold text-amber-400">🏇 成語賽馬</h2>
+            <div className="text-lg font-semibold bg-stone-700 px-4 py-2 rounded-lg">
+              ✅ 答對: <span className="text-green-400">{score}</span> 題
+            </div>
+          </div>
+
+          {/* 賽馬跑道 */}
+          <div className="w-full max-w-4xl bg-green-700 rounded-xl overflow-hidden border-8 border-stone-900 shadow-2xl relative mb-6 z-10">
+            
+            {/* 終點線背景 */}
+            <div className="absolute right-0 top-0 w-12 h-full z-10 flex flex-col justify-between opacity-80" 
+                 style={{ backgroundImage: 'repeating-linear-gradient(45deg, #fff 25%, transparent 25%, transparent 75%, #fff 75%, #fff), repeating-linear-gradient(45deg, #fff 25%, #000 25%, #000 75%, #fff 75%, #fff)', backgroundSize: '20px 20px', backgroundPosition: '0 0, 10px 10px' }}>
+            </div>
+
+            {/* 跑道 1：玩家 */}
+            <div className="relative h-20 sm:h-24 border-b-4 border-dashed border-white/40 bg-green-600/50 flex items-center px-2">
+              <span className="absolute left-2 text-stone-200 text-sm font-bold opacity-70 z-0">玩家跑道</span>
+              <div 
+                className={`absolute text-5xl sm:text-6xl transition-all duration-700 ease-out z-20 drop-shadow-md ${gameState === 'playing' ? 'anim-gallop' : 'facing-right'}`}
+                style={{ left: `calc(${playerPos}% - 10px)` }}
+              >
+                🏇
+              </div>
+            </div>
+
+            {/* 跑道 2：電腦 1 */}
+            <div className="relative h-20 sm:h-24 border-b-4 border-dashed border-white/40 bg-green-700/50 flex items-center px-2">
+              <span className="absolute left-2 text-stone-200 text-sm font-bold opacity-70 z-0">電腦 1號</span>
+              <div 
+                className={`absolute text-5xl sm:text-6xl transition-all duration-1000 ease-linear z-20 drop-shadow-md ${gameState === 'playing' ? 'anim-gallop-slow' : 'facing-right'}`}
+                style={{ left: `calc(${bot1Pos}% - 10px)` }}
+              >
+                🐎
+              </div>
+            </div>
+
+            {/* 跑道 3：電腦 2 */}
+            <div className="relative h-20 sm:h-24 bg-green-800/50 flex items-center px-2">
+              <span className="absolute left-2 text-stone-200 text-sm font-bold opacity-70 z-0">電腦 2號</span>
+              <div 
+                className={`absolute text-5xl sm:text-6xl transition-all duration-1000 ease-linear z-20 drop-shadow-md ${gameState === 'playing' ? 'anim-gallop-fast' : 'facing-right'}`}
+                style={{ left: `calc(${bot2Pos}% - 10px)` }}
+              >
+                🎠
+              </div>
+            </div>
+          </div>
+
+          {/* 答題區 */}
+          <div className="w-full max-w-4xl bg-white/95 rounded-2xl shadow-xl flex flex-col overflow-hidden relative border-4 border-stone-300 z-10">
+            
+            {/* 計時條 */}
+            <div className="w-full h-3 bg-stone-200">
+              <div 
+                className={`h-full transition-all duration-1000 linear ${timeLeft > 5 ? 'bg-blue-500' : 'bg-red-500'}`}
+                style={{ width: `${(timeLeft / 15) * 100}%` }}
+              ></div>
+            </div>
+
+            {/* 題目區域 */}
+            <div className="p-6 sm:p-8 flex-1">
+              <div className="flex justify-between items-start mb-6">
+                <h3 className="text-xl sm:text-3xl font-bold text-stone-800 leading-snug">
+                  Q: {currentQ?.q}
+                </h3>
+                <div className={`text-2xl font-black rounded-full w-12 h-12 flex items-center justify-center shrink-0 ml-4 shadow-inner ${timeLeft > 5 ? 'bg-stone-100 text-stone-600' : 'bg-red-100 text-red-600 animate-pulse'}`}>
+                  {timeLeft}
+                </div>
+              </div>
+
+              {/* 選項按鈕 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                {currentQ?.options.map((option, idx) => {
+                  let btnClass = "bg-stone-100 hover:bg-stone-200 border-stone-300 text-stone-700";
+                  
+                  if (feedback) {
+                    if (option === currentQ.answer) {
+                      btnClass = "bg-green-500 border-green-600 text-white shadow-lg transform scale-105"; 
+                    } else if (feedback === 'wrong' || feedback === 'timeout') {
+                      btnClass = "bg-stone-200 border-stone-300 text-stone-400 opacity-50"; 
+                    }
+                  }
+
+                  return (
+                    <button
+                      key={idx}
+                      disabled={feedback !== null}
+                      onClick={() => handleAnswer(option)}
+                      className={`border-2 rounded-xl p-4 text-lg sm:text-xl font-bold transition-all text-left ${btnClass} ${feedback ? 'cursor-not-allowed' : 'active:scale-95 hover:shadow-md'}`}
+                    >
+                      {String.fromCharCode(65 + idx)}. {option}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 回饋疊加層 (答對/答錯提示) */}
+            {feedback && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-sm z-30 animate-in fade-in duration-200">
+                {feedback === 'correct' && (
+                  <div className="bg-green-500 text-white px-8 py-6 rounded-2xl shadow-2xl transform scale-110 flex flex-col items-center">
+                    <span className="text-6xl mb-2">✅</span>
+                    <span className="text-3xl font-black">答對了！馬匹加速！</span>
+                  </div>
+                )}
+                {feedback === 'wrong' && (
+                  <div className="bg-red-500 text-white px-8 py-6 rounded-2xl shadow-2xl transform scale-110 flex flex-col items-center">
+                    <span className="text-6xl mb-2">❌</span>
+                    <span className="text-3xl font-black">答錯了！</span>
+                  </div>
+                )}
+                {feedback === 'timeout' && (
+                  <div className="bg-orange-500 text-white px-8 py-6 rounded-2xl shadow-2xl transform scale-110 flex flex-col items-center">
+                    <span className="text-6xl mb-2">⏱️</span>
+                    <span className="text-3xl font-black">時間到！</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+        </div>
+      );
+    }
+
+    // 將 React 應用渲染到畫面上
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
